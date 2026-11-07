@@ -892,7 +892,6 @@ function topic(id, midSet) {
   return `<div class="topic"><div class="grow"><b>${esc(displayTitle)}</b> <span class="chip">${esc(id)}</span> ${inMid ? '<span class="chip warn">Midterm</span>' : ''} <button class="mini-btn" data-act="cu-mid-toggle" data-id="${esc(id)}" aria-pressed="${inMid}">${inMid ? 'Remove from midterm' : 'Add to midterm'}</button>${diff.length ? `<div class="meta">Midterm title: ${diff.map(m => esc(m.title)).join(' · ')}</div>` : ''}</div><div class="stages">${st}</div></div>`;
 }
 function render() {
-  sync();
   const db = get(), sk = V.sk, q = V.q.toLowerCase(), ids = topicIds(sk), A = ASSESSMENTS[ASSESS_KEY[sk]], studied = i => !!(db.progress[i] && db.progress[i].study), midSet = new Set(midtermIds(sk)), mids = ids.filter(i => midSet.has(i));
   const metricIds = V.f === 'mid' ? mids : ids;
   const n = st => metricIds.filter(i => db.progress[i] && db.progress[i][st]).length;
