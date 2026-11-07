@@ -1032,6 +1032,63 @@ const actions = {
 exports.render = render;
 exports.actions = actions;
 });
+__d("src/pages/schedule.js", function (exports) {
+const { get, save } = __r("src/core/store.js");
+const { today, diffDays } = __r("src/core/dates.js");
+const { esc, uid, ph, openForm, toast, confirmBox, app } = __r("src/core/ui.js");
+const { TIMETABLE_DAYS } = __r("src/data/curriculum.js");
+const { timetable, findSession, exams, examState, parseExamDate } = __r("src/modules/schedule.js");
+
+const V = { tab: 'exams', week: '1' };
+function examsView() {
+  const t = today(), ex = exams().slice().sort((a, b) => ((a.iso || '9') < (b.iso || '9') ? -1 : 1));
+  const row = e => {
+    const st = examState(e), n = e.iso ? diffDays(e.iso, t) : 0;
+    const chip = st === 'done' ? '<span class="chip ok">Done</span>' : st === 'past' ? '<span class="chip">Past</span>' : st === 'today' ? '<span class="chip bad">Today</span>' : st === 'upcoming' ? `<span class="chip warn">in ${n} d</span>` : '<span class="chip">No calendar date</span>';
+    return `<div class="li"><label class="chk-hit"><input type="checkbox" data-act="ex-done" data-id="${esc(e.id)}" ${e.done ? 'checked' : ''} aria-label="Mark exam completed"></label><div class="grow"><b>${esc(e.subject)} · ${esc(e.type)}</b> ${chip}<div class="meta">${esc(e.day || '')} ${esc(e.date)} · ${esc(e.time || '')}${e.location ? ' · ' + esc(e.location) : ''}${e.notes ? '<br>' + esc(e.notes) : ''}</div></div><div class="row-acts"><button class="btn" data-act="ex-edit" data-id="${esc(e.id)}">Edit</button><button class="btn" data-act="ex-dup" data-id="${esc(e.id)}">Duplicate</button><button class="btn" data-act="ex-del" data-id="${esc(e.id)}">Delete</button></div></div>`;
+  };
+  const up = ex.filter(e => ['upcoming', 'today'].includes(examState(e))), rest = ex.filter(e => !up.includes(e));
+  return `<section class="card"><div class="card-h"><h2>Upcoming</h2><button class="btn primary" data-act="ex-add">+ Add exam</button></div>${up.map(row).join('') || '<p class="meta">No upcoming exam on the schedule. Past dates stay listed below exactly as originally entered.</p>'}</section><section class="card"><div class="card-h"><h2>Past &amp; completed</h2><span class="chip">${rest.length}</span></div>${rest.map(row).join('') || '<p class="meta">Nothing here yet.</p>'}</section>`;
+}
+function ttView() {
+  const tt = timetable(), weeks = Object.keys(tt).sort((a, b) => a - b);
+  if (!tt[V.week]) V.week = weeks[0] || '1';
+  const sess = tt[V.week] || [], days = [...new Set([...TIMETABLE_DAYS, ...sess.map(s => s.day)])];
+  const wt = weeks.map(w => `<button class="btn ${V.week === w ? 'on' : ''}" data-act="tt-week" data-w="${esc(w)}">Week ${esc(w)}</button>`).join('');
+  const body = days.map(d => { const ss = sess.filter(s => s.day === d); return ss.length ? `<div class="li"><div class="day">${esc(d)}</div><div class="grow">${ss.map(s => `<div class="sess"><b>${esc(s.subject)}</b>${s.note ? ` <span class="meta">${esc(s.note)}</span>` : ''}<span class="row-acts"><button class="btn" data-act="tt-edit" data-id="${esc(s.id)}">Edit</button><button class="btn" data-act="tt-dup" data-id="${esc(s.id)}">Duplicate</button><button class="btn" data-act="tt-del" data-id="${esc(s.id)}">Delete</button></span></div>`).join('')}</div></div>` : ''; }).join('');
+  return `<div class="tabs">${wt}<button class="btn" data-act="tt-addweek">+ Week</button></div><section class="card"><div class="card-h"><h2>Week ${esc(V.week)}</h2><div class="row-acts"><button class="btn primary" data-act="tt-add">+ Add session</button><button class="btn" data-act="tt-delweek">Delete week</button></div></div>${body || '<p class="meta">No sessions this week.</p>'}</section>`;
+}
+function render() {
+  const tabs = [['exams', 'Exams'], ['timetable', 'Timetable']].map(([k, l]) => `<button class="btn" ${V.tab === k ? 'aria-current="page"' : ''} data-act="sc-tab" data-t="${k}">${l}</button>`).join('');
+  return ph('Plan', 'Schedule', 'Exam dates are kept exactly as originally entered. Past, today and upcoming are worked out from the real calendar date.') + `<div class="tabs">${tabs}</div>` + (V.tab === 'exams' ? examsView() : ttView());
+}
+function examForm(e) {
+  const f = [{ k: 'subject', label: 'Subject', required: true }, { k: 'type', label: 'Type (Continuous, Final, OSCE…)', required: true }, { k: 'day', label: 'Day' }, { k: 'date', label: 'Date as written (e.g. 16/11/2025)', required: true }, { k: 'iso', label: 'Calendar date (for countdown)', type: 'date' }, { k: 'isoEnd', label: 'Last day (if a range)', type: 'date' }, { k: 'time', label: 'Time' }, { k: 'location', label: 'Location' }, { k: 'notes', label: 'Notes', type: 'textarea', full: true }];
+  openForm({ title: e && e.id ? 'Edit exam' : 'Add exam', fields: f, values: e || {}, onSubmit: o => { const p = parseExamDate(o.date), iso = o.iso || p.iso || '', isoEnd = o.isoEnd || p.isoEnd || iso; const db = get(); exams(); if (e && e.id) Object.assign(db.exams.find(x => x.id === e.id), { ...o, iso, isoEnd }); else db.exams.push({ id: uid('x'), ...o, iso, isoEnd }); save(); toast('Exam saved'); app.rerender(); } });
+}
+function sessionForm(s, w) {
+  const tt = timetable(), weeks = Object.keys(tt).sort((a, b) => a - b);
+  openForm({ title: s ? 'Edit session' : 'Add session', fields: [{ k: 'week', label: 'Week', type: 'select', options: weeks }, { k: 'day', label: 'Day', type: 'select', options: TIMETABLE_DAYS }, { k: 'subject', label: 'Subject / title', required: true, full: true }, { k: 'note', label: 'Notes', full: true }], values: { week: w, day: s ? s.day : TIMETABLE_DAYS[0], subject: s ? s.subject : '', note: s ? s.note : '' }, onSubmit: o => { const db = get(); if (s) { const f = findSession(s.id); db.timetable[f.w].splice(f.i, 1); } db.timetable[o.week].push({ id: s ? s.id : uid('s'), day: o.day, subject: o.subject, note: o.note }); V.week = o.week; save(); toast('Session saved'); app.rerender(); } });
+}
+const actions = {
+  'sc-tab': el => { V.tab = el.dataset.t; },
+  'ex-done': el => { const x = exams().find(e => e.id === el.dataset.id); if (x) { x.done = el.checked; save(); } },
+  'ex-add': () => { examForm(null); return false; },
+  'ex-edit': el => { examForm(exams().find(e => e.id === el.dataset.id)); return false; },
+  'ex-dup': el => { const x = exams().find(e => e.id === el.dataset.id); if (x) { get().exams.push({ ...x, id: uid('x'), done: false }); save(); toast('Exam duplicated'); } },
+  'ex-del': el => { if (!confirmBox('Delete this exam from the schedule?')) return false; exams(); get().exams = get().exams.filter(e => e.id !== el.dataset.id); save(); },
+  'tt-week': el => { V.week = el.dataset.w; },
+  'tt-addweek': () => { const tt = timetable(), n = Math.max(0, ...Object.keys(tt).map(Number)) + 1; tt[n] = []; V.week = String(n); save(); },
+  'tt-delweek': () => { const tt = timetable(); if (!confirmBox(`Delete week ${V.week} and its ${(tt[V.week] || []).length} session(s)?`)) return false; delete tt[V.week]; save(); },
+  'tt-add': () => { sessionForm(null, V.week); return false; },
+  'tt-edit': el => { const f = findSession(el.dataset.id); if (f) sessionForm(f.s, f.w); return false; },
+  'tt-dup': el => { const f = findSession(el.dataset.id); if (f) { get().timetable[f.w].push({ ...f.s, id: uid('s') }); save(); toast('Session duplicated'); } },
+  'tt-del': el => { const f = findSession(el.dataset.id); if (!f || !confirmBox('Delete this session?')) return false; get().timetable[f.w].splice(f.i, 1); save(); },
+};
+
+exports.render = render;
+exports.actions = actions;
+});
 __r("src/main.js");
 </script>
   </body>
