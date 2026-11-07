@@ -1,0 +1,8 @@
+{
+  "rewrites": [
+    {
+      "source": "/",
+      "destination": "/Semester9_Tracker_V15.html"
+    }
+  ]
+}
