@@ -325,7 +325,6 @@ const { today, diffDays } = __r("src/core/dates.js");
 const { esc, bar } = __r("src/core/ui.js");
 const { ASSESSMENTS } = __r("src/data/curriculum.js");
 const { KEYS, SUBJ_NAME, ASSESS_KEY, topicIds } = __r("src/data/index.js");
-const { items, due } = __r("src/modules/recall.js");
 const { progress } = __r("src/modules/logbook.js");
 const { upcoming } = __r("src/modules/schedule.js");
 const { select: pickCurriculum } = __r("src/pages/curriculum.js");
@@ -333,12 +332,12 @@ const { select: pickLogbook } = __r("src/pages/logbook.js");
 
 const plural = (n, w) => `${n} ${w}${n === 1 ? '' : 's'}`;
 function render() {
-  const t = today(), db = get(), d = due(items()).filter(x => (db.recallQueue || []).includes(x.id)), open = db.todos.filter(x => !x.done), nx = upcoming(1)[0];
+  const t = today(), db = get(), open = db.todos.filter(x => !x.done), nx = upcoming(1)[0];
   const exam = nx ? ` · next exam: ${esc(nx.subject)} ${esc(nx.type)}, ${esc(nx.date)} (${diffDays(nx.iso, t) === 0 ? 'today' : 'in ' + diffDays(nx.iso, t) + ' days'})` : ' · no upcoming exam on the schedule';
-  const hero = `<section class="hero"><div class="eyebrow">Semester 9 · Level 5</div><h1 class="title">${d.length ? plural(d.length, 'lecture') + ' to re-read today' : 'Nothing due for re-reading today'}</h1><p class="sub">${plural(open.length, 'open task')}${exam}</p><div class="hero-actions"><a class="btn primary" href="#/today">Open today</a><a class="btn" href="#/curriculum">Curriculum</a><a class="btn" href="#/logbook">Logbook</a></div></section>`;
+  const hero = `<section class="hero"><div class="eyebrow">Semester 9 · Level 5</div><h1 class="title">Your Semester 9 progress</h1><p class="sub">${plural(open.length, 'open task')}${exam}</p><div class="hero-actions"><a class="btn primary" href="#/today">Open today</a><a class="btn" href="#/curriculum">Curriculum</a><a class="btn" href="#/logbook">Logbook</a></div></section>`;
   const cards = KEYS.map(sk => {
-    const ids = topicIds(sk), p = db.progress, st = ids.filter(i => p[i] && p[i].study).length, L = progress(sk), A = ASSESSMENTS[ASSESS_KEY[sk]], n = d.filter(x => x.tp.sk === sk).length;
-    return `<section class="card"><div class="card-h"><h2>${esc(SUBJ_NAME[sk])}</h2><span class="chip">${A.total} marks</span></div><div class="meta">Lectures studied · ${st}/${ids.length}</div>${bar(st, ids.length)}<div class="meta mt">Logbook checklist · ${L.done}/${L.total}</div>${bar(L.done, L.total, 'ok')}<div class="meta mt">${n ? `<span class="chip warn">${n} to re-read today</span>` : 'No reviews due'}</div><div class="row-acts mt"><button class="btn" data-act="go-cur" data-sk="${sk}">Curriculum</button><button class="btn" data-act="go-log" data-sk="${sk}">Logbook</button></div></section>`;
+    const ids = topicIds(sk), p = db.progress, st = ids.filter(i => p[i] && p[i].study).length, L = progress(sk), A = ASSESSMENTS[ASSESS_KEY[sk]];
+    return `<section class="card"><div class="card-h"><h2>${esc(SUBJ_NAME[sk])}</h2><span class="chip">${A.total} marks</span></div><div class="meta">Lectures studied · ${st}/${ids.length}</div>${bar(st, ids.length)}<div class="meta mt">Logbook checklist · ${L.done}/${L.total}</div>${bar(L.done, L.total, 'ok')}<div class="row-acts mt"><button class="btn" data-act="go-cur" data-sk="${sk}">Curriculum</button><button class="btn" data-act="go-log" data-sk="${sk}">Logbook</button></div></section>`;
   }).join('');
   return hero + `<div class="grid">${cards}</div><section class="card"><div class="card-h"><h2>Your data</h2></div><p class="meta">Everything is saved in this browser. Export a backup regularly. Import also accepts the backup file of the older single-page tracker.</p><div class="row-acts"><button class="btn" data-global="export">Export backup</button><button class="btn" data-global="import">Import backup</button></div></section>`;
 }
@@ -867,20 +866,14 @@ const { nice } = __r("src/core/dates.js");
 const { esc, bar, ph, openForm, app } = __r("src/core/ui.js");
 const { ASSESSMENTS } = __r("src/data/curriculum.js");
 const { KEYS, SUBJ_NAME, ASSESS_KEY, STAGES, TOPICS, sections, topicIds, inMidterm } = __r("src/data/index.js");
-const { sync, STEPS, dueDate } = __r("src/modules/recall.js");
 
 const V = { sk: 'family', f: 'all', q: '', shut: {} };
 const select = sk => { V.sk = sk; };
 const sd = d => (d ? nice(d).replace(/^\w+,\s*/, '') : '');
-function ladder(id, p) {
-  const e = get().recall[id]; if (!(p && p.study) || !e) return '';
-  const k = STEPS.find(x => !e.done[x]);
-  return k ? `<span class="chip">Next review ${sd(dueDate(e, k))}</span>` : '<span class="chip ok">Reviews complete</span>';
-}
 function topic(id, midSet) {
   const t = TOPICS[id], p = get().progress[id] || {}, diff = t.mids.filter(m => !m.same), inMid = midSet.has(id), displayTitle = V.f === 'mid' && t.mids.length ? t.mids[0].title : t.title;
   const st = STAGES.map(([k, l]) => `<label class="stage ${p[k] ? 'on' : ''}"><input type="checkbox" data-act="stage" data-id="${esc(id)}" data-stage="${k}" ${p[k] ? 'checked' : ''}><span>${l}${k === 'questions' && p.questionTotal ? ` ${p.questionCorrect || 0}/${p.questionTotal}` : ''}</span>${p[k + 'Date'] ? `<small>${sd(p[k + 'Date'])}</small>` : ''}</label>`).join('');
-  return `<div class="topic"><div class="grow"><b>${esc(displayTitle)}</b> <span class="chip">${esc(id)}</span> ${inMid ? '<span class="chip warn">Midterm</span>' : ''} <button class="mini-btn" data-act="cu-mid-toggle" data-id="${esc(id)}" aria-pressed="${inMid}">${inMid ? 'Remove from midterm' : 'Add to midterm'}</button> <button class="mini-btn" data-act="cu-recall-add" data-id="${esc(id)}">Add to today’s recall</button> ${ladder(id, p)}${diff.length ? `<div class="meta">Midterm title: ${diff.map(m => esc(m.title)).join(' · ')}</div>` : ''}</div><div class="stages">${st}</div></div>`;
+  return `<div class="topic"><div class="grow"><b>${esc(displayTitle)}</b> <span class="chip">${esc(id)}</span> ${inMid ? '<span class="chip warn">Midterm</span>' : ''} <button class="mini-btn" data-act="cu-mid-toggle" data-id="${esc(id)}" aria-pressed="${inMid}">${inMid ? 'Remove from midterm' : 'Add to midterm'}</button>${diff.length ? `<div class="meta">Midterm title: ${diff.map(m => esc(m.title)).join(' · ')}</div>` : ''}</div><div class="stages">${st}</div></div>`;
 }
 function render() {
   sync();
@@ -909,7 +902,6 @@ const actions = {
   'cu-search': el => { V.q = el.value.trim(); },
   'cu-sect': el => { V.shut[el.dataset.k] = !V.shut[el.dataset.k]; },
   'cu-mid-toggle': el => { const set = new Set(midtermIds(V.sk)); toggleMidterm(V.sk, el.dataset.id, !set.has(el.dataset.id)); },
-  'cu-recall-add': el => { enqueueRecall(el.dataset.id); },
   stage: el => {
     const { id, stage } = el.dataset;
     if (stage !== 'questions') { setStage(id, stage, el.checked); return; }
@@ -996,102 +988,28 @@ exports.render = render;
 exports.actions = actions;
 });
 __d("src/pages/today.js", function (exports) {
-const { get, save, setStage, enqueueRecall, dequeueRecall } = __r("src/core/store.js");
+const { get, save, setStage } = __r("src/core/store.js");
 const { today, nice, diffDays } = __r("src/core/dates.js");
 const { esc, uid, ph, toast } = __r("src/core/ui.js");
-const { items, due, completeDue, forgot, dueDate } = __r("src/modules/recall.js");
 const { TOPICS, KEYS, SUBJ_NAME, topicIds } = __r("src/data/index.js");
 const { upcoming } = __r("src/modules/schedule.js");
 
 const plural = (n, w) => `${n} ${w}${n === 1 ? '' : 's'}`;
-function reviewRow(x, t) {
-  const k = x.dueSteps[0] || x.pend[0], late = k && dueDate(x.e, k) < t ? diffDays(t, dueDate(x.e, k)) : 0, nxt = x.pend.find(step => step !== k);
-  return `<div class="chk-row"><label class="chk-hit"><input type="checkbox" data-act="review" data-id="${esc(x.id)}" aria-label="Mark ${esc(x.tp.title)} as re-read"></label><div class="grow"><b>${esc(x.tp.title)}</b> <span class="chip">${esc(SUBJ_NAME[x.tp.sk])}</span><div class="meta">${k ? `Re-read · day +${k}${late ? ` · <span class="chip bad">${late} d overdue</span>` : x.dueSteps.length ? ' · due today' : ' · selected manually'}${nxt ? ` · next: ${nice(dueDate(x.e, nxt))}` : ''}` : 'Selected manually'}</div></div><button class="btn" data-act="queue-remove" data-id="${esc(x.id)}">Remove</button></div>`;
-}
-function suggestions() {
-  const p = get().progress, out = [];
-  for (const sk of KEYS) { const id = topicIds(sk).find(i => !(p[i] && p[i].study)); if (id) out.push(TOPICS[id]); }
-  return out;
-}
 function render() {
-  const t = today(), db = get(), all = items(), d = due(all), active = all.filter(x => (db.recallQueue || []).includes(x.id)), suggestionsDue = d.filter(x => !(db.recallQueue || []).includes(x.id)), open = db.todos.filter(x => !x.done), shown = [...open, ...db.todos.filter(x => x.done && x.doneDate === t)];
-  const nxt = all.filter(x => x.status === 'upcoming').sort((a, b) => (a.nextDate < b.nextDate ? -1 : 1))[0], sug = suggestions(), ex = upcoming(3);
-  return ph('Today', nice(t), `${plural(active.length, 'selected recall item')} · ${plural(open.length, 'open task')}`)
-    + `<section class="card"><div class="card-h"><h2>Active recall</h2><span class="chip ${active.length ? 'warn' : 'ok'}">${active.length} selected</span></div>`
-    + (active.length ? active.map(x => reviewRow(x, t)).join('') : '<p class="meta">Nothing selected for today. Choose items from the suggestions below or add a lecture from Curriculum.</p>')
-    + `<p class="meta hint">Only items you select appear here. Checking an item records today’s re-read; Remove keeps its history.</p></section>`
-    + `<details class="card"><summary><b>Due suggestions</b> · ${suggestionsDue.length} available</summary>${suggestionsDue.length ? suggestionsDue.map(x => `<div class="chk-row"><label class="chk-hit"><input type="checkbox" data-act="enqueue" data-id="${esc(x.id)}" aria-label="Select ${esc(x.tp.title)} for today"></label><div class="grow"><b>${esc(x.tp.title)}</b> <span class="chip">${esc(SUBJ_NAME[x.tp.sk])}</span><div class="meta">Due · ${x.dueSteps.map(k => '+' + k).join(', ')}</div></div></div>`).join('') : '<p class="meta">No unselected due suggestions right now.</p>'}</details>`
+  const t = today(), db = get(), open = db.todos.filter(x => !x.done), shown = [...open, ...db.todos.filter(x => x.done && x.doneDate === t)], ex = upcoming(3);
+  const sug = [];
+  for (const sk of KEYS) { const id = topicIds(sk).find(i => !(db.progress[i] && db.progress[i].study)); if (id) sug.push(TOPICS[id]); }
+  return ph('Today', nice(t), `${plural(open.length, 'open task')}`)
     + `<section class="card"><div class="card-h"><h2>Tasks</h2><span class="chip">${open.length} open</span></div><form class="inline-form" data-act="todo-add"><label class="sr" for="newTask">New task</label><input id="newTask" name="title" placeholder="Add a task for today…" autocomplete="off"><button class="btn primary" type="submit">Add</button></form>`
     + (shown.map(x => `<div class="chk-row ${x.done ? 'is-done' : ''}"><label class="chk-hit"><input type="checkbox" data-act="todo" data-id="${esc(x.id)}" ${x.done ? 'checked' : ''} aria-label="Done"></label><div class="grow"><b>${esc(x.title)}</b></div><button class="btn icon-btn" data-act="todo-del" data-id="${esc(x.id)}" aria-label="Delete task">×</button></div>`).join('') || '<p class="meta">No tasks yet.</p>') + `</section>`
-    + (sug.length ? `<section class="card"><div class="card-h"><h2>Up next in the curriculum</h2></div>${sug.map(tp => `<div class="chk-row"><label class="chk-hit"><input type="checkbox" data-act="study" data-id="${esc(tp.id)}" aria-label="Mark ${esc(tp.title)} as studied"></label><div class="grow"><b>${esc(tp.title)}</b> <span class="chip">${esc(SUBJ_NAME[tp.sk])}</span><div class="meta">${esc(tp.section)} · ${esc(tp.id)}</div></div></div>`).join('')}<p class="meta hint">Studying a lecture does not enroll it in Active Recall.</p></section>` : '')
+    + (sug.length ? `<section class="card"><div class="card-h"><h2>Up next in the curriculum</h2></div>${sug.map(tp => `<div class="chk-row"><label class="chk-hit"><input type="checkbox" data-act="study" data-id="${esc(tp.id)}" aria-label="Mark ${esc(tp.title)} as studied"></label><div class="grow"><b>${esc(tp.title)}</b> <span class="chip">${esc(SUBJ_NAME[tp.sk])}</span><div class="meta">${esc(tp.section)} · ${esc(tp.id)}</div></div></div>`).join('')}</section>` : '')
     + (ex.length ? `<section class="card"><div class="card-h"><h2>Upcoming exams</h2></div>${ex.map(e => { const n = diffDays(e.iso, t); return `<div class="li"><div class="grow"><b>${esc(e.subject)} · ${esc(e.type)}</b><div class="meta">${esc(e.date)} · ${esc(e.time || '')}</div></div><span class="chip warn">${n === 0 ? 'today' : 'in ' + n + ' d'}</span></div>`; }).join('')}</section>` : '');
 }
 const actions = {
-  review: el => { completeDue(el.dataset.id); dequeueRecall(el.dataset.id); toast('Re-read saved and removed from today.'); },
-  enqueue: el => { if (el.checked) enqueueRecall(el.dataset.id); else dequeueRecall(el.dataset.id); },
-  'queue-remove': el => { dequeueRecall(el.dataset.id); },
-  forgot: el => { forgot(el.dataset.id); toast('Schedule restarted from today'); },
-  study: el => { setStage(el.dataset.id, 'study', el.checked); toast('Marked as studied. Reviews start tomorrow.'); },
+  study: el => { setStage(el.dataset.id, 'study', el.checked); toast('Marked as studied.'); },
   todo: el => { const x = get().todos.find(y => y.id === el.dataset.id); if (x) { x.done = el.checked; x.doneDate = el.checked ? today() : ''; save(); } },
   'todo-del': el => { get().todos = get().todos.filter(x => x.id !== el.dataset.id); save(); },
   'todo-add': f => { const v = f.elements.title.value.trim(); if (!v) return false; get().todos.unshift({ id: uid('t'), title: v, subject: '', done: false, doneDate: '', created: today() }); save(); },
-};
-
-exports.render = render;
-exports.actions = actions;
-});
-__d("src/pages/schedule.js", function (exports) {
-const { get, save } = __r("src/core/store.js");
-const { today, diffDays } = __r("src/core/dates.js");
-const { esc, uid, ph, openForm, toast, confirmBox, app } = __r("src/core/ui.js");
-const { TIMETABLE_DAYS } = __r("src/data/curriculum.js");
-const { timetable, findSession, exams, examState, parseExamDate } = __r("src/modules/schedule.js");
-
-const V = { tab: 'exams', week: '1' };
-function examsView() {
-  const t = today(), ex = exams().slice().sort((a, b) => ((a.iso || '9') < (b.iso || '9') ? -1 : 1));
-  const row = e => {
-    const st = examState(e), n = e.iso ? diffDays(e.iso, t) : 0;
-    const chip = st === 'done' ? '<span class="chip ok">Done</span>' : st === 'past' ? '<span class="chip">Past</span>' : st === 'today' ? '<span class="chip bad">Today</span>' : st === 'upcoming' ? `<span class="chip warn">in ${n} d</span>` : '<span class="chip">No calendar date</span>';
-    return `<div class="li"><label class="chk-hit"><input type="checkbox" data-act="ex-done" data-id="${esc(e.id)}" ${e.done ? 'checked' : ''} aria-label="Mark exam completed"></label><div class="grow"><b>${esc(e.subject)} · ${esc(e.type)}</b> ${chip}<div class="meta">${esc(e.day || '')} ${esc(e.date)} · ${esc(e.time || '')}${e.location ? ' · ' + esc(e.location) : ''}${e.notes ? '<br>' + esc(e.notes) : ''}</div></div><div class="row-acts"><button class="btn" data-act="ex-edit" data-id="${esc(e.id)}">Edit</button><button class="btn" data-act="ex-dup" data-id="${esc(e.id)}">Duplicate</button><button class="btn" data-act="ex-del" data-id="${esc(e.id)}">Delete</button></div></div>`;
-  };
-  const up = ex.filter(e => ['upcoming', 'today'].includes(examState(e))), rest = ex.filter(e => !up.includes(e));
-  return `<section class="card"><div class="card-h"><h2>Upcoming</h2><button class="btn primary" data-act="ex-add">+ Add exam</button></div>${up.map(row).join('') || '<p class="meta">No upcoming exam on the schedule. Past dates stay listed below exactly as originally entered.</p>'}</section><section class="card"><div class="card-h"><h2>Past &amp; completed</h2><span class="chip">${rest.length}</span></div>${rest.map(row).join('') || '<p class="meta">Nothing here yet.</p>'}</section>`;
-}
-function ttView() {
-  const tt = timetable(), weeks = Object.keys(tt).sort((a, b) => a - b);
-  if (!tt[V.week]) V.week = weeks[0] || '1';
-  const sess = tt[V.week] || [], days = [...new Set([...TIMETABLE_DAYS, ...sess.map(s => s.day)])];
-  const wt = weeks.map(w => `<button class="btn ${V.week === w ? 'on' : ''}" data-act="tt-week" data-w="${esc(w)}">Week ${esc(w)}</button>`).join('');
-  const body = days.map(d => { const ss = sess.filter(s => s.day === d); return ss.length ? `<div class="li"><div class="day">${esc(d)}</div><div class="grow">${ss.map(s => `<div class="sess"><b>${esc(s.subject)}</b>${s.note ? ` <span class="meta">${esc(s.note)}</span>` : ''}<span class="row-acts"><button class="btn" data-act="tt-edit" data-id="${esc(s.id)}">Edit</button><button class="btn" data-act="tt-dup" data-id="${esc(s.id)}">Duplicate</button><button class="btn" data-act="tt-del" data-id="${esc(s.id)}">Delete</button></span></div>`).join('')}</div></div>` : ''; }).join('');
-  return `<div class="tabs">${wt}<button class="btn" data-act="tt-addweek">+ Week</button></div><section class="card"><div class="card-h"><h2>Week ${esc(V.week)}</h2><div class="row-acts"><button class="btn primary" data-act="tt-add">+ Add session</button><button class="btn" data-act="tt-delweek">Delete week</button></div></div>${body || '<p class="meta">No sessions this week.</p>'}</section>`;
-}
-function render() {
-  const tabs = [['exams', 'Exams'], ['timetable', 'Timetable']].map(([k, l]) => `<button class="btn" ${V.tab === k ? 'aria-current="page"' : ''} data-act="sc-tab" data-t="${k}">${l}</button>`).join('');
-  return ph('Plan', 'Schedule', 'Exam dates are kept exactly as originally entered. Past, today and upcoming are worked out from the real calendar date.') + `<div class="tabs">${tabs}</div>` + (V.tab === 'exams' ? examsView() : ttView());
-}
-function examForm(e) {
-  const f = [{ k: 'subject', label: 'Subject', required: true }, { k: 'type', label: 'Type (Continuous, Final, OSCE…)', required: true }, { k: 'day', label: 'Day' }, { k: 'date', label: 'Date as written (e.g. 16/11/2025)', required: true }, { k: 'iso', label: 'Calendar date (for countdown)', type: 'date' }, { k: 'isoEnd', label: 'Last day (if a range)', type: 'date' }, { k: 'time', label: 'Time' }, { k: 'location', label: 'Location' }, { k: 'notes', label: 'Notes', type: 'textarea', full: true }];
-  openForm({ title: e && e.id ? 'Edit exam' : 'Add exam', fields: f, values: e || {}, onSubmit: o => { const p = parseExamDate(o.date), iso = o.iso || p.iso || '', isoEnd = o.isoEnd || p.isoEnd || iso; const db = get(); exams(); if (e && e.id) Object.assign(db.exams.find(x => x.id === e.id), { ...o, iso, isoEnd }); else db.exams.push({ id: uid('x'), ...o, iso, isoEnd }); save(); toast('Exam saved'); app.rerender(); } });
-}
-function sessionForm(s, w) {
-  const tt = timetable(), weeks = Object.keys(tt).sort((a, b) => a - b);
-  openForm({ title: s ? 'Edit session' : 'Add session', fields: [{ k: 'week', label: 'Week', type: 'select', options: weeks }, { k: 'day', label: 'Day', type: 'select', options: TIMETABLE_DAYS }, { k: 'subject', label: 'Subject / title', required: true, full: true }, { k: 'note', label: 'Notes', full: true }], values: { week: w, day: s ? s.day : TIMETABLE_DAYS[0], subject: s ? s.subject : '', note: s ? s.note : '' }, onSubmit: o => { const db = get(); if (s) { const f = findSession(s.id); db.timetable[f.w].splice(f.i, 1); } db.timetable[o.week].push({ id: s ? s.id : uid('s'), day: o.day, subject: o.subject, note: o.note }); V.week = o.week; save(); toast('Session saved'); app.rerender(); } });
-}
-const actions = {
-  'sc-tab': el => { V.tab = el.dataset.t; },
-  'ex-done': el => { const x = exams().find(e => e.id === el.dataset.id); if (x) { x.done = el.checked; save(); } },
-  'ex-add': () => { examForm(null); return false; },
-  'ex-edit': el => { examForm(exams().find(e => e.id === el.dataset.id)); return false; },
-  'ex-dup': el => { const x = exams().find(e => e.id === el.dataset.id); if (x) { get().exams.push({ ...x, id: uid('x'), done: false }); save(); toast('Exam duplicated'); } },
-  'ex-del': el => { if (!confirmBox('Delete this exam from the schedule?')) return false; exams(); get().exams = get().exams.filter(e => e.id !== el.dataset.id); save(); },
-  'tt-week': el => { V.week = el.dataset.w; },
-  'tt-addweek': () => { const tt = timetable(), n = Math.max(0, ...Object.keys(tt).map(Number)) + 1; tt[n] = []; V.week = String(n); save(); },
-  'tt-delweek': () => { const tt = timetable(); if (!confirmBox(`Delete week ${V.week} and its ${(tt[V.week] || []).length} session(s)?`)) return false; delete tt[V.week]; save(); },
-  'tt-add': () => { sessionForm(null, V.week); return false; },
-  'tt-edit': el => { const f = findSession(el.dataset.id); if (f) sessionForm(f.s, f.w); return false; },
-  'tt-dup': el => { const f = findSession(el.dataset.id); if (f) { get().timetable[f.w].push({ ...f.s, id: uid('s') }); save(); toast('Session duplicated'); } },
-  'tt-del': el => { const f = findSession(el.dataset.id); if (!f || !confirmBox('Delete this session?')) return false; get().timetable[f.w].splice(f.i, 1); save(); },
 };
 
 exports.render = render;
