@@ -266,12 +266,11 @@ const { today } = __r("src/core/dates.js");
 const dashboard = __r("src/pages/dashboard.js");
 const todayPage = __r("src/pages/today.js");
 const curriculum = __r("src/pages/curriculum.js");
-const recall = __r("src/pages/recall.js");
 const logbook = __r("src/pages/logbook.js");
 const schedule = __r("src/pages/schedule.js");
 
-const ROUTES = { dashboard: ['Overview', 'home', dashboard], today: ['Today', 'today', todayPage], curriculum: ['Curriculum', 'book', curriculum], recall: ['Active recall', 'recall', recall], logbook: ['Logbook', 'log', logbook], schedule: ['Schedule', 'cal', schedule] };
-const NAV = [['Workspace', ['dashboard', 'today']], ['Study', ['curriculum', 'recall']], ['Clinical', ['logbook']], ['Plan', ['schedule']]];
+const ROUTES = { dashboard: ['Overview', 'home', dashboard], today: ['Today', 'today', todayPage], curriculum: ['Curriculum', 'book', curriculum], logbook: ['Logbook', 'log', logbook], schedule: ['Schedule', 'cal', schedule] };
+const NAV = [['Workspace', ['dashboard', 'today']], ['Study', ['curriculum']], ['Clinical', ['logbook']], ['Plan', ['schedule']]];
 let cur = dashboard;
 
 function shell() {
@@ -468,7 +467,6 @@ const ICONS = {
   home: '<path d="M4 11.5 12 4l8 7.5"/><path d="M6 10v9a1 1 0 0 0 1 1h3v-6h4v6h3a1 1 0 0 0 1-1v-9"/>',
   today: '<rect x="4" y="5" width="16" height="15" rx="2"/><path d="M4 10h16M9 3v4M15 3v4"/><path d="m9 15 2 2 4-4"/>',
   book: '<path d="M5 4h10a3 3 0 0 1 3 3v13H8a3 3 0 0 1-3-3V4Z"/><path d="M5 17a3 3 0 0 1 3-3h10"/>',
-  recall: '<path d="M4 12a8 8 0 0 1 14-5.3L20 9"/><path d="M20 4v5h-5"/><path d="M20 12a8 8 0 0 1-14 5.3L4 15"/><path d="M4 20v-5h5"/>',
   log: '<rect x="5" y="4" width="14" height="17" rx="2"/><path d="M9 4V3a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v1"/><path d="m8.5 13 2 2 4-4.5"/>',
   cal: '<circle cx="12" cy="12" r="8"/><path d="M12 7v5l3 2"/>',
 };
@@ -976,40 +974,6 @@ const actions = {
   todo: el => { const x = get().todos.find(y => y.id === el.dataset.id); if (x) { x.done = el.checked; x.doneDate = el.checked ? today() : ''; save(); } },
   'todo-del': el => { get().todos = get().todos.filter(x => x.id !== el.dataset.id); save(); },
   'todo-add': f => { const v = f.elements.title.value.trim(); if (!v) return false; get().todos.unshift({ id: uid('t'), title: v, subject: '', done: false, doneDate: '', created: today() }); save(); },
-};
-
-exports.render = render;
-exports.actions = actions;
-});
-__d("src/pages/recall.js", function (exports) {
-const { get, enqueueRecall, dequeueRecall } = __r("src/core/store.js");
-const { today, nice, addDays } = __r("src/core/dates.js");
-const { esc, ph } = __r("src/core/ui.js");
-const { items, due, tick, forgot, dueDate, STEPS } = __r("src/modules/recall.js");
-const { SUBJ_NAME, KEYS, TOPICS } = __r("src/data/index.js");
-
-const F = { sk: '', st: 'all' };
-const sd = d => nice(d).replace(/^\w+,\s*/, '');
-function render() {
-  const t = today(), all = items(), d = due(all), w = addDays(t, 7);
-  const over = d.filter(x => x.status === 'overdue').length, soon = all.filter(x => x.status === 'upcoming' && x.nextDate <= w).length, lap = all.reduce((n, x) => n + (x.e.lapses || 0), 0);
-  const rows = all.filter(x => (!F.sk || x.tp.sk === F.sk) && (F.st === 'all' || (F.st === 'due' ? x.dueSteps.length : F.st === 'upcoming' ? x.status === 'upcoming' : x.status === 'done'))).sort((a, b) => ((a.nextDate || '9') < (b.nextDate || '9') ? -1 : 1));
-  const box = (x, k) => { const done = x.e.done[k], dd = dueDate(x.e, k), c = done ? 'ok' : dd < t ? 'over' : dd === t ? 'today' : ''; return `<label class="step ${c}"><input type="checkbox" data-act="step" data-id="${esc(x.id)}" data-k="${k}" ${done ? 'checked' : ''} aria-label="Review +${k} days"><span>+${k}</span><small>${done ? '✓ ' + sd(done) : sd(dd)}</small></label>`; };
-  const sel = (act, val, opts) => `<select data-act="${act}" aria-label="${act}">${opts.map(([v, l]) => `<option value="${v}" ${v === val ? 'selected' : ''}>${l}</option>`).join('')}</select>`;
-  return ph('Study', 'Active recall', 'Review history is kept here. Nothing is enrolled automatically; choose a lecture for Today, and use the collapsed suggestions there when an item is due.')
-    + `<div class="kpis"><div class="kpi"><b>${d.length}</b><span>Due now</span></div><div class="kpi"><b>${over}</b><span>Overdue</span></div><div class="kpi"><b>${soon}</b><span>Next 7 days</span></div><div class="kpi"><b>${all.length}</b><span>Lectures in the schedule</span></div><div class="kpi"><b>${lap}</b><span>Times forgotten</span></div></div>`
-    + `<section class="card"><div class="card-h"><h2>Recall history</h2><div class="row-acts"><button class="btn primary" data-act="rc-add">+ Add lecture to today</button>${sel('rc-sk', F.sk, [['', 'All subjects'], ...KEYS.map(k => [k, SUBJ_NAME[k]])])}${sel('rc-st', F.st, [['all', 'All'], ['due', 'Due'], ['upcoming', 'Upcoming'], ['done', 'Completed']])}</div></div>`
-    + (rows.length ? rows.map(x => `<div class="li"><div class="grow"><b>${esc(x.tp.title)}</b> <span class="chip">${esc(SUBJ_NAME[x.tp.sk])}</span>${x.e.lapses ? ` <span class="chip warn">forgotten ×${x.e.lapses}</span>` : ''}<div class="meta">Studied ${sd(x.e.base)}</div><div class="stages mt">${STEPS.map(k => box(x, k)).join('')}</div></div><div class="row-acts"><button class="btn" data-act="${(get().recallQueue || []).includes(x.id) ? 'rc-remove' : 'rc-queue'}" data-id="${esc(x.id)}">${(get().recallQueue || []).includes(x.id) ? 'Remove from today' : 'Add to today'}</button><button class="btn" data-act="forgot" data-id="${esc(x.id)}">Reset schedule</button></div></div>`).join('') : `<p class="meta">${all.length ? 'No lectures match this filter.' : 'No recall history yet. Add a lecture to today to begin its review history; marking Study alone never enrolls it.'}</p>`)
-    + `<p class="meta hint">History remains saved even after removing a lecture from today. Marking Study in Curriculum never adds a lecture here.</p></section>`;
-}
-const actions = {
-  step: el => { tick(el.dataset.id, +el.dataset.k, el.checked); },
-  forgot: el => { forgot(el.dataset.id); },
-  'rc-sk': el => { F.sk = el.value; },
-  'rc-queue': el => { enqueueRecall(el.dataset.id); },
-  'rc-remove': el => { dequeueRecall(el.dataset.id); },
-  'rc-add': () => { const choices = Object.values(TOPICS).filter(tp => !tp.midOnly).map(tp => [tp.id, `${SUBJ_NAME[tp.sk]} · ${tp.title}`]); const { openForm, app } = __r('src/core/ui.js'); openForm({ title: 'Choose a lecture for today', fields: [{ k: 'id', label: 'Lecture', type: 'select', options: choices, required: true }], onSubmit: v => { enqueueRecall(v.id); app.rerender(); } }); return false; },
-  'rc-st': el => { F.st = el.value; },
 };
 
 exports.render = render;
