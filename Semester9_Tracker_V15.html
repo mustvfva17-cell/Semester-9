@@ -918,9 +918,9 @@ exports.examState = examState;
 exports.upcoming = upcoming;
 });
 __d("src/pages/curriculum.js", function (exports) {
-const { get, setStage, setScore, midtermIds, toggleMidterm, addLectureTask } = __r("src/core/store.js");
+const { get, setStage, midtermIds, toggleMidterm, addLectureTask } = __r("src/core/store.js");
 const { nice } = __r("src/core/dates.js");
-const { esc, bar, ph, openForm, app, toast } = __r("src/core/ui.js");
+const { esc, bar, ph, toast } = __r("src/core/ui.js");
 const { ASSESSMENTS } = __r("src/data/curriculum.js");
 const { KEYS, SUBJ_NAME, ASSESS_KEY, STAGES, TOPICS, sections, topicIds, inMidterm } = __r("src/data/index.js");
 
@@ -972,10 +972,7 @@ const actions = {
   'cu-today-add': el => { const t = TOPICS[el.dataset.id]; if (!t) return; const task = addLectureTask(t.id, t.title, SUBJ_NAME[t.sk]); toast('Added to Today · ' + ({ study: 'Study', first: 'Rev 1', second: 'Rev 2' }[task.stageKey])); },
   stage: el => {
     const { id, stage } = el.dataset;
-    if (stage !== 'questions') { setStage(id, stage, el.checked); return; }
-    el.checked = !el.checked; const p = get().progress[id] || {};
-    openForm({ title: 'Question practice', note: TOPICS[id] ? TOPICS[id].title : id, fields: [{ k: 'total', label: 'Questions attempted', type: 'number', min: 0 }, { k: 'correct', label: 'Answered correctly', type: 'number', min: 0 }], values: { total: p.questionTotal || '', correct: p.questionCorrect || '' }, submit: 'Save', onSubmit: v => { setScore(id, +v.total || 0, +v.correct || 0); app.rerender(); } });
-    return false;
+    setStage(id, stage, el.checked);
   },
 };
 
